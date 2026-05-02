@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Premier Textmoji Studio</title>
+    <title>Textmoji Generator</title>
     <style>
         :root {
             --accent: #00d4ff;
@@ -41,7 +41,6 @@
         }
         .control-group { display: flex; flex-direction: column; gap: 8px; text-align: left; }
         label { font-size: 0.85rem; color: #aaa; font-weight: 600; }
-        
         button {
             padding: 12px 24px;
             border: none;
@@ -54,7 +53,6 @@
         }
         button:hover { opacity: 0.9; transform: translateY(-1px); }
         button.secondary { background: #444; color: white; margin-left: 10px; }
-
         #display-area {
             background: #000;
             border-radius: 12px;
@@ -83,7 +81,6 @@
 
 <div class="container">
     <h1>Textmoji Generator</h1>
-    
     <div class="controls">
         <div class="control-group">
             <label>Source Image</label>
@@ -105,12 +102,10 @@
             <input type="range" id="threshold" min="0" max="255" value="128">
         </div>
     </div>
-
     <div style="margin-bottom: 20px;">
         <button id="copyBtn">Copy to Clipboard</button>
         <button id="downloadBtn" class="secondary">Export as PNG</button>
     </div>
-
     <div id="display-area">
         <div id="output">Upload an image to begin...</div>
     </div>
@@ -123,7 +118,7 @@
     const thresholdInput = document.getElementById('threshold');
     const output = document.getElementById('output');
     const copyBtn = document.getElementById('copyBtn');
-    
+    const downloadBtn = document.getElementById('downloadBtn');
     const charset = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`'. ";
     let rawText = "";
 
@@ -144,17 +139,13 @@
         const mode = modeInput.value;
         document.body.className = mode + "-mode";
         document.getElementById('threshold-wrap').style.display = mode === 'braille' ? 'flex' : 'none';
-
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        
-        // Braille uses 2x4 chunks, ASCII uses 1x1
         const scaleY = mode === 'braille' ? (img.height / img.width) * w : (img.height / img.width) * w * 0.5;
         canvas.width = w;
-        canvas.height = scaleY;
-        ctx.drawImage(img, 0, 0, w, scaleY);
-        const p = ctx.getImageData(0, 0, w, scaleY).data;
-
+        canvas.height = Math.floor(scaleY);
+        ctx.drawImage(img, 0, 0, w, canvas.height);
+        const p = ctx.getImageData(0, 0, w, canvas.height).data;
         if (mode === 'color') {
             let html = "";
             rawText = "";
@@ -166,12 +157,11 @@
                     rawText += char;
                     html += `<span style="color:rgb(${p[i]},${p[i+1]},${p[i+2]})">${char === ' ' ? '&nbsp;' : char}</span>`;
                 }
-                html += "<br>";
+                html += "\n";
                 rawText += "\n";
             }
-            output.innerHTML = html;
+            output.innerHTML = html.replace(/\n/g, "<br>");
         } else {
-            // Braille Logic
             let braille = "";
             const thresh = parseInt(thresholdInput.value);
             for (let y = 0; y < canvas.height; y += 4) {
@@ -191,11 +181,37 @@
         }
     }
 
-    copyBtn.onclick = () => {
-        navigator.clipboard.writeText(rawText);
-        const originalText = copyBtn.innerText;
-        copyBtn.innerText = "Copied!";
-        setTimeout(() => copyBtn.innerText = originalText, 2000);
+    copyBtn.onclick = async () => {
+        if (!rawText) return;
+        try {
+            await navigator.clipboard.writeText(rawText);
+            const originalText = copyBtn.innerText;
+            copyBtn.innerText = "Copied!";
+            setTimeout(() => copyBtn.innerText = originalText, 2000);
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    downloadBtn.onclick = () => {
+        const exportCanvas = document.createElement('canvas');
+        const eCtx = exportCanvas.getContext('2d');
+        const rect = output.getBoundingClientRect();
+        const padding = 40;
+        exportCanvas.width = rect.width + padding;
+        exportCanvas.height = rect.height + padding;
+        eCtx.fillStyle = "#000";
+        eCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+        eCtx.font = modeInput.value === 'braille' ? "14px Courier New" : "10px Courier New";
+        eCtx.fillStyle = "#fff";
+        const lines = rawText.split('\n');
+        lines.forEach((line, index) => {
+            eCtx.fillText(line, padding/2, (padding/2) + (index * (modeInput.value === 'braille' ? 16 : 10)));
+        });
+        const link = document.createElement('a');
+        link.download = 'textmoji-art.png';
+        link.href = exportCanvas.toDataURL();
+        link.click();
     };
 
     [upload, resInput, modeInput, thresholdInput].forEach(el => el.onchange = update);
